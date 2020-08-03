@@ -1,20 +1,20 @@
 <?php
 /**
  * PLUGIN NAME: participant_export_qrcode.php
- * DESCRIPTION: This script provide a list of qrcode image survey from activated survey form. All the image will be named "record_id[underscore]qrcode_hash.png"
- * VERSION: 1.0
+ * DESCRIPTION: This script provide a list of qrcode image survey from activated survey form. All the image will be named "record_id[underscore]qrcode_hash.png" (Compatible with REDCap >= 9.8.0)
+ * VERSION: 2.0
  * AUTHOR: Hugo.POTIER@chu-nimes.fr
  *
  * External Specifications:
  * The script should be call with a valid pid tag, if the survey option is not activated in the project the script stop.
  * 
  * Internal Specifications:
- * The script will create a temp directory and generate qr-code image from a event or survey form.
+ * The script will create a temp directory and generate QR-code image from a event or survey form.
  * A csv file is also create included the column of the partipant list and the id image and qrcode file image.
  * All files are included in a unique zip file and uploaded to user;
  * At the end of the process, all the temporary files are deleted.
  * 
- * Here an test link example:
+ * Here a test link example:
  * http://localhost/redcap/plugins/participant_export_qrcode.php?pid=14&survey_id=11&event_id=41
  *
  */
@@ -23,8 +23,10 @@ error_reporting(E_ALL);
 require_once "../redcap_connect.php";
 
 require_once APP_PATH_DOCROOT . "Config/init_project.php";
-require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php";
-require_once APP_PATH_DOCROOT . "Classes/phpqrcode/qrlib.php";
+//require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; // Version < 9.8.0
+require_once APP_PATH_DOCROOT . "Classes/Survey.php"; // Version >= 9.8.0 
+//require_once APP_PATH_DOCROOT . "Classes/phpqrcode/qrlib.php";
+require_once APP_PATH_DOCROOT . "Libraries/phpqrcode/qrlib.php";
 
 $inOneHour = date("YmdHis", mktime(date("H")+1,date("i"),date("s"),date("m"),date("d"),date("Y")));
 $filename ='';
@@ -32,7 +34,7 @@ $indice_img = 0;
 $relative_path='';
 
 // Increase memory limit in case needed for intensive processing (i.e. lots of participants)
-increaseMemory(2048);
+//increaseMemory(2048);
 
 // Temp folder to generate qr_code
 //$qrcode_temp_folder = 'qrcode_temp'.mt_rand();
@@ -59,11 +61,13 @@ $enable_participant_identifiers = $ligne['enable_participant_identifiers'];
 
 // If no survey id, assume it's the first form and retrieve
 if (!isset($_GET['survey_id'])) {
-	$_GET['survey_id'] = getSurveyId();
+	//$_GET['survey_id'] = getSurveyId(); // Version < 9.8.0
+	$_GET['survey_id'] = Survey::getSurveyId(); // Version >= 9.8.0 
 }
 
 // Ensure the survey_id belongs to this project
-if (!checkSurveyProject($_GET['survey_id'])) {
+//if (!checkSurveyProject($_GET['survey_id'])) { // Version < 9.8.0
+if (!Survey::checkSurveyProject($_GET['survey_id'])) { // Version >= 9.8.0 
 	redirect(APP_PATH_WEBROOT . "index.php?pid=" . PROJECT_ID);
 }
 
@@ -156,16 +160,18 @@ global $conn;
 // Gather participant list (with identfiers and if Sent/Responded)
 $part_list = REDCap::getParticipantList($Proj->surveys[$_GET['survey_id']]['form_name'], $_GET['event_id']);
 
+
+
 //processing form input
 //remember to sanitize user input in real-life solution !!!
-$errorCorrectionLevel = 'H';
+$errorCorrectionLevel = 'H'; // Default
 if (isset($_GET['level']) && in_array($_GET['level'], array('L','M','Q','H')))
 	$errorCorrectionLevel = $_GET['level'];    
 
-// Resolution of qr-code
-$matrixPointSize = 2;
+// Resolution of QR-code
+$matrixPointSize = 2; // Default
 if (isset($_GET['size']))
-	$matrixPointSize = min(max((int)$_GET['size'], 1), 10);
+	$matrixPointSize = min(max((int)$_GET['size'], 1), 40);
 
 
 if (isset($part_list) and !empty($part_list)) {
@@ -190,13 +196,13 @@ for($i=0;$i<count($part_list);$i++) {
 $headers = array($lang['control_center_56'], $lang['survey_69']); // "Adresse e-mail","Identifiants des participants (s'il y en a)"
 if ($twilio_enabled) $headers[] = $lang['design_89']; //= "Téléphone"
 $headers[] = $lang['global_49']; // = "Enreg."
-$headers[] = $lang['survey_46']; // = "Msg envyé?"
+$headers[] = $lang['survey_46']; // = "Msg envoyé?"
 $headers[] = $lang['survey_47']; // = "Répondu?"
 $headers[] = $lang['survey_628']; // = "Survey Access Code"
 $headers[] = $lang['global_90']; // "Lien de l'enquête"
 if (isset($surveyQueueEnabled) && $surveyQueueEnabled) $headers[] = $lang['survey_553']; // "Lien vers la file d'attente des enquêtes"
 $headers[] = 'id_img'; // identifiant de l'image peut être numéro d'ordre ou le record_id suivant si l'option enable_participant_identifiers est active ou non
-$headers[] = 'qrcode_name'; // "nom du fichier du qr-code"
+$headers[] = 'qrcode_name'; // "nom du fichier du QR-code"
 
 // Begin writing file from query result
 //$fp = fopen('php://memory', "x+");
@@ -204,8 +210,10 @@ $headers[] = 'qrcode_name'; // "nom du fichier du qr-code"
 $outfileName = camelCase(html_entity_decode($app_title.$surveyActiveName, ENT_QUOTES)) . "_Participants_" . date("Y-m-d_Hi") . ".csv";
 $fp = fopen(PNG_TEMP_DIR.$outfileName, 'x+') or die('Error creating file');
 
-if ($fp)
-{
+if ($fp){
+	
+	fseek($fp, 0);
+	fwrite($fp,chr(239).chr(187).chr(191));
 	// Write headers to file
 	fputcsv($fp, $headers);
 
@@ -231,17 +239,15 @@ if ($fp)
 		fputcsv($fp, $row);
 	}
 
-	// adding UTF8 WITH BOM
-	//fseek($fp, 0);
-	//fwrite($fp,chr(239).chr(187).chr(191));
+	// adding UTF-8 WITH BOM
+
 	fclose($fp);
 
     // benchmark
     //QRtools::timeBenchmark();
 	
 }
-else
-{
+else{
 	print $lang['global_01']; //= "ERREUR"
 }
 
@@ -312,7 +318,7 @@ if ($zip->open($target_zip, ZipArchive::CREATE) === TRUE) {
 			
 			
 		}
-		// Add qr-code file to zip
+		// Add QR-code file to zip
 		$zip->addFile(PNG_TEMP_DIR . $row['qrcode_name'], "$zip_parent_folder/$name");
 		
 	}
@@ -320,11 +326,11 @@ if ($zip->open($target_zip, ZipArchive::CREATE) === TRUE) {
 	$zip->addFile(PNG_TEMP_DIR . $outfileName, "$outfileName");
 	
 	// Set text for Instructions.txt file
-	$readme = "This zip file contain each qr-code for a unique event.
-To identify each qr-code, the file was named like '[record_id]_[survey_access_code].png'.
-You can also find a csv file that contain an id_img and the list of each qr-code image file name.
+	$readme = "This zip file contain each QR-code for a unique event.
+To identify each QR-code, the file was named like '[record_id]_[survey_access_code].png' if Participant Identifier is enable or '[Order_Number]_[survey_access_code].png' if it disable.
+You can also find a csv file that contain an id_img and the list of each QR-code image file name.
 You may need it to mail merge variable images with microsoft® word.
-You can print on a sticker or on wristband to get direct access to the \"good\" patient form.
+You can print on a sticker or on wristband to get direct access to the 'good' patient form.
 
 IMPORTANT:
 The mail merge word process need to have the exact path to find your images.
@@ -354,8 +360,8 @@ else
 }
 
 	// Logging
-	log_event("","redcap_edocs_metadata","MANAGE",$_GET['survey_id'],"survey_id = {$_GET['survey_id']}\narm_id = {$_GET['arm_id']}","Download ZIP of qrcode survey participant list");
-
+	//log_event("","redcap_edocs_metadata","MANAGE",$_GET['survey_id'],"survey_id = {$_GET['survey_id']}\narm_id = {$_GET['arm_id']}","Download ZIP of qrcode survey participant list"); // Version < 9.8.0
+	REDCap::logEvent("Download ZIP file of all QR-code survey participant list","Participant List: ".$surveyActiveName.",\nError-correcting code: ".$errorCorrectionLevel.",\nQR-Code Size: ".$matrixPointSize.",\nPath for mail merge image: ".$relative_path,"","",$event_id,$project_id); // Version >= 9.8.0 
 
 // Download file and then delete it from the server
 header('Pragma: anytextexeptno-cache', true);

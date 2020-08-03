@@ -1,8 +1,8 @@
 <?php
 /**
  * PLUGIN NAME: participant_qrcode.php
- * DESCRIPTION: This script provide an GUI to set parameters to participant list of qrcode image survey from activated survey form. All the image will be named "record_id[underscore] 
- * VERSION: 1.0
+ * DESCRIPTION: This script provide an GUI to set parameters to participant list of qrcode image survey from activated survey form. All the image will be named "record_id[underscore] (Compatible with REDCap >= 9.8.0)
+ * VERSION: 2.0
  * AUTHOR: Hugo.POTIER@chu-nimes.fr
  *
  * External Specifications:
@@ -22,7 +22,8 @@ error_reporting(E_ALL);
 require_once "../redcap_connect.php";
 
 require_once APP_PATH_DOCROOT . "Config/init_project.php";
-require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php";
+//require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; // Version < 9.8.0
+require_once APP_PATH_DOCROOT . "Classes/Survey.php"; // Version >= 9.8.0
 
 // If not using a type of project with surveys, then don't allow user to use this page.
 if (!$surveys_enabled) redirect(APP_PATH_WEBROOT . "index.php?pid=$project_id");
@@ -33,7 +34,8 @@ if (!isset($_GET['survey_id']))
 {
 	if ($Proj->firstFormSurveyId != null) {
 		// Get first form's survey_id
-		$_GET['survey_id'] = getSurveyId();
+		//$_GET['survey_id'] = getSurveyId(); // Version < 9.8.0
+		$_GET['survey_id'] = Survey::getSurveyId(); // Version >= 9.8.0 
 	} elseif (!empty($Proj->surveys)) {
 		// Surveys exist, but the first form is not a survey. So get the first available survey_id and the first available
 		// event (exclude any "deleted"/orphaned survey instruments)
@@ -56,7 +58,8 @@ if (!isset($_GET['survey_id']))
 
 
 // Ensure the survey_id belongs to this project
-if (!checkSurveyProject($_GET['survey_id'])) {
+//if (!checkSurveyProject($_GET['survey_id'])) { // Version < 9.8.0
+if (!Survey::checkSurveyProject($_GET['survey_id'])) { // Version >= 9.8.0 
 	redirect(APP_PATH_WEBROOT . "index.php?pid=" . PROJECT_ID);
 }
 
@@ -134,11 +137,11 @@ function pageLoad(event) {
 </script>
 <div class="projhdr">
   <div style="float:left;">
-					<img src="<?= APP_PATH_IMAGES ?>documents_arrow.png"> Export participant image QR-Code files</div><br><br></div> <!-- todo create $lang reference -->
+					<?php /*<img src="<?= APP_PATH_IMAGES ?>documents_arrow.png"> */ ?><i class="fa fa-qrcode"></i> Export participant image QR-Code files</div><br><br></div> <!-- todo create $lang reference -->
 This module can export all QR-Code images files from a specific event with csv participant list reference.<br /> 
 <!-- todo create $lang reference -->
 This could be used to prepare study and print on paper, sticker, wristband to get rapidly the exact form of a record.<br />
-You can use the mail merge variable images process with microsoft® word.<a href="javascript:;" onClick="$('#partListInstrMore').toggle('fade');" style="text-decoration:underline;"><?php echo $lang['survey_86'] ?></a><br>
+You can use the mail merge variable images process with microsoft® word <a href="javascript:;" onClick="$('#partListInstrMore').toggle('fade');" style="text-decoration:underline;"><?php echo $lang['survey_86'] ?></a>.<br/><br/>
 <?php
 // Get enable_participant_identifiers
 $q='SELECT enable_participant_identifiers FROM redcap_projects WHERE project_id='.$_GET['pid'];
@@ -146,13 +149,14 @@ $result = mysqli_query($conn,$q);
 $ligne = mysqli_fetch_assoc($result);
 $enable_participant_identifiers = $ligne['enable_participant_identifiers'];
 
+
 if($enable_participant_identifiers == '1'){
 //
-echo "The qrcode file will be named like: [".$first_field."]_[".$lang['survey_628']."].png<br/>
+echo "The QR-code file will be named like: [".$first_field."]_[".$lang['survey_628']."].png<br/>
 Please note: If you don't want the record_id in front of the file name you need to disable the participant Identifier in the Participant List page.";
 }else{
 //
-echo "The qrcode file will be named like: [OrderNumber]_[".$lang['survey_628']."].png<br/>
+echo "Because <i>'Participant Identifier'</i> is disable in <i>'Participant List'</i>, the QR-code file will be named like: [OrderNumber]_[".$lang['survey_628']."].png<br/>
 Please note: If you want the record_id in front of the file name you need to enable the participant Identifier in the Participant List page.";
 }
 ?>
@@ -188,7 +192,7 @@ Tips: To avoid subject to get connect to the form, you can add a survey login pr
 			        </select></td>
 		        </tr>
 			    <tr>
-			      <td style="text-align:right;padding-right:5px;"> Size: </td>
+			      <td style="text-align:right;padding-right:5px;">QR-Code Size: </td>
 			      <!-- todo create $lang reference -->
 			      <td><select name="size" id="size">
 			        <option value="1">1 (0.87cm) [scan dist. min: 8cm - max: 8cm]</option>
@@ -201,6 +205,10 @@ Tips: To avoid subject to get connect to the form, you can add a survey login pr
 			        <option value="8">8 (6.94 cm) [scan dist. min: 9.6cm - max: 69.3cm]</option>
 			        <option value="9">9 (7.81 cm) [scan dist. min: 10.3cm - max: 78.1cm]</option>
 			        <option value="10">10 (8.68 cm) [scan dist. min: 11.1cm - max: 86.9cm]</option>
+					<option value="11">11 (11.90 cm) [scan dist. min: 18cm - max: 100 cm]</option>
+					<option value="12">12 (13.00 cm) [scan dist. min: 20cm - max: 200 cm]</option>
+					<option value="17">17 (18.50 cm) [scan dist. min: 26cm - max: 300 cm]</option>
+					<option value="23">23 (24.00 cm) [scan dist. min: 31cm - max: > 300 cm]</option>
 			        </select></td>
 		        </tr>
 			    <tr>
@@ -222,7 +230,7 @@ function redirect(){
 	window.location.href=app_path_webroot_full+'plugins/participant_export_qrcode.php?pid=<?= $project_id?>&survey_id='+seid[0]+'&event_id='+seid[1]+'&level='+level+'&size='+size+'&relative_path='+relative_path;
 }
 </script>
-<button class="jqbuttonmed ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" onclick="redirect();" role="button"><span class="ui-button-text"><img src="<?= APP_PATH_IMAGES ?>folder_zipper.png" style="vertical-align:middle;"> <span style="vertical-align:middle;">Download QR-Code list image</span></span></button><!-- todo create $lang reference -->
+<button class="jqbuttonmed ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only" onclick="redirect();" role="button"><span class="ui-button-text"><?php /*<img src="<?= APP_PATH_IMAGES ?>folder_zipper.png" style="vertical-align:middle;">*/ ?><i class="fas fa-file-archive"></i> <span style="vertical-align:middle;">Download QR-Code list image</span></span></button><!-- todo create $lang reference -->
 </div><br></div>
 <?php
 
