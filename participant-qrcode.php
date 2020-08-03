@@ -20,10 +20,13 @@
 define("NL","<br />\n");
 error_reporting(E_ALL);
 require_once "../redcap_connect.php";
-
 require_once APP_PATH_DOCROOT . "Config/init_project.php";
-//require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; // Version < 9.8.0
-require_once APP_PATH_DOCROOT . "Classes/Survey.php"; // Version >= 9.8.0
+# To ensure compatibility with REDCap versions < and >= 9.8.0
+if ( version_compare($redcap_version, '9.8.0') >= 0) { // Version >= 9.8.0
+  require_once APP_PATH_DOCROOT . "Classes/Survey.php";
+} else { // Version < 9.8.0
+  require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; 
+}
 
 // If not using a type of project with surveys, then don't allow user to use this page.
 if (!$surveys_enabled) redirect(APP_PATH_WEBROOT . "index.php?pid=$project_id");

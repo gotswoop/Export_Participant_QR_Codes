@@ -21,12 +21,15 @@
 define("NL","<br />\n");
 error_reporting(E_ALL);
 require_once "../redcap_connect.php";
-
 require_once APP_PATH_DOCROOT . "Config/init_project.php";
-//require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; // Version < 9.8.0
-require_once APP_PATH_DOCROOT . "Classes/Survey.php"; // Version >= 9.8.0 
-//require_once APP_PATH_DOCROOT . "Classes/phpqrcode/qrlib.php";
-require_once APP_PATH_DOCROOT . "Libraries/phpqrcode/qrlib.php";
+# To ensure compatibility with REDCap versions < and >= 9.8.0
+if ( version_compare($redcap_version, '9.8.0') >= 0) { // Version >= 9.8.0
+  require_once APP_PATH_DOCROOT . "Classes/Survey.php";
+  require_once APP_PATH_DOCROOT . "Libraries/phpqrcode/qrlib.php";
+} else { // Version < 9.8.0
+  require_once APP_PATH_DOCROOT . "Surveys/survey_functions.php"; 
+  require_once APP_PATH_DOCROOT . "Classes/phpqrcode/qrlib.php";
+}
 
 $inOneHour = date("YmdHis", mktime(date("H")+1,date("i"),date("s"),date("m"),date("d"),date("Y")));
 $filename ='';
